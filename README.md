@@ -156,8 +156,3 @@ xcodebuild test -scheme LaunchpadPlus -destination 'platform=macOS' -parallel-te
 
 - **[⚡ Quick Fix](QUICKFIX.md)** - Fast solution for macOS security warnings (1 minute)
 - **[🛠️ Troubleshooting Guide](TROUBLESHOOTING.md)** - Solutions for common issues and detailed explanations
-
-## 🙏 Credits
-- Inspired by macOS Launchpad
-- Built with SwiftUI and modern macOS APIs
-- Based on LaunchBack project
