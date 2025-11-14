@@ -28,7 +28,7 @@ class LaunchpadConstants {
    static let dimmedOpacity: Double = 0.2
 
    // MARK: - UI Constants
-   static let searchBarWidth: CGFloat = 480
+   static let searchBarWidth: CGFloat = 300
    static let searchBarHeight: CGFloat = 36
    static let folderWidth: CGFloat = 1200
    static let folderHeight: CGFloat = 800

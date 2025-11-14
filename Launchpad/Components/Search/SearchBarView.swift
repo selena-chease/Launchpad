@@ -61,7 +61,7 @@ struct SearchBarView: View {
                   }
                }
                .padding(.vertical, 4)
-               .frame(minWidth: 220)
+               .frame(minWidth: 200)
             }
          }
 
