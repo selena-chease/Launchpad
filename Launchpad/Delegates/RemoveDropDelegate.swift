@@ -13,12 +13,23 @@ struct RemoveDropDelegate: DropDelegate {
          withAnimation(LaunchpadConstants.dragDropAnimation) {
             let removedApp = folder.apps.remove(at: index)
             addAppToPage(app: removedApp)
+            
+            // Remove empty folder from pages
+            if folder.apps.isEmpty {
+               removeEmptyFolder()
+            }
          }
       }
 
       AppManager.shared.saveAppGridItems()
       self.draggedApp = nil
       return true
+   }
+   
+   private func removeEmptyFolder() {
+      guard let pageIndex = pages.firstIndex(where: { page in page.contains(where: { $0.id == folder.id }) }),
+            let folderIndex = pages[pageIndex].firstIndex(where: { $0.id == folder.id }) else { return }
+      pages[pageIndex].remove(at: folderIndex)
    }
 
    private func addAppToPage(app: AppInfo) {
