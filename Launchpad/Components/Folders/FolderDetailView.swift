@@ -78,7 +78,7 @@ struct FolderDetailView: View {
             .onTapGesture { editingName = false }
          }
          .onChange(of: folder?.apps.isEmpty) { _, isEmpty in
-            if isEmpty ?? false {
+            if isEmpty == true {
                dismissWithAnimation()
             }
          }
