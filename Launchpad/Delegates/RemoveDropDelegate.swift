@@ -12,7 +12,16 @@ struct RemoveDropDelegate: DropDelegate {
       if let index = folder.apps.firstIndex(where: { $0.id == draggedApp.id }) {
          withAnimation(LaunchpadConstants.dragDropAnimation) {
             let removedApp = folder.apps.remove(at: index)
-            addAppToPage(app: removedApp)
+            
+            // Find folder location once for both operations
+            if let (pageIndex, folderIndex) = findFolderLocation() {
+               addAppToPage(app: removedApp, pageIndex: pageIndex)
+               
+               // Remove empty folder from pages
+               if folder.apps.isEmpty {
+                  pages[pageIndex].remove(at: folderIndex)
+               }
+            }
          }
       }
 
@@ -20,9 +29,17 @@ struct RemoveDropDelegate: DropDelegate {
       self.draggedApp = nil
       return true
    }
+   
+   private func findFolderLocation() -> (pageIndex: Int, folderIndex: Int)? {
+      for (pageIndex, page) in pages.enumerated() {
+         if let folderIndex = page.firstIndex(where: { $0.id == folder.id }) {
+            return (pageIndex, folderIndex)
+         }
+      }
+      return nil
+   }
 
-   private func addAppToPage(app: AppInfo) {
-      guard let pageIndex = pages.firstIndex(where: { page in page.contains(where: { $0.id == folder.id }) }) else { return }
+   private func addAppToPage(app: AppInfo, pageIndex: Int) {
       let updatedApp = AppInfo(name: app.name, icon: app.icon, path: app.path, bundleId: app.bundleId, lastOpenedDate: app.lastOpenedDate, installDate: app.installDate, page: pageIndex)
       pages[pageIndex].append(.app(updatedApp))
       PageOverflowHelper.handleOverflow(pages: &pages, pageIndex: pageIndex, appsPerPage: appsPerPage)

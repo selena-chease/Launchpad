@@ -77,6 +77,11 @@ struct FolderDetailView: View {
             }
             .onTapGesture { editingName = false }
          }
+         .onChange(of: folder?.apps.isEmpty) { _, isEmpty in
+            if isEmpty == true {
+               dismissWithAnimation()
+            }
+         }
       }
    }
 
@@ -116,11 +121,14 @@ struct FolderDetailView: View {
    }
 
    private func saveFolder() {
-      guard let pageIndex = pages.firstIndex(where: { page in page.contains(where: { $0.id == folder!.id }) }),
-            let itemIndex = pages[pageIndex].firstIndex(where: { $0.id == folder!.id }) else {
+      guard let currentFolder = folder,
+            let pageIndex = pages.firstIndex(where: { page in page.contains(where: { $0.id == currentFolder.id }) }),
+            let itemIndex = pages[pageIndex].firstIndex(where: { $0.id == currentFolder.id }) else {
+         // Folder was already removed (e.g., became empty), just dismiss
+         folder = nil
          return
       }
-      let newFolder = Folder(name: folder!.name, page: folder!.page, apps: folder!.apps)
+      let newFolder = Folder(name: currentFolder.name, page: currentFolder.page, apps: currentFolder.apps)
       pages[pageIndex][itemIndex] = .folder(newFolder)
       folder = nil
       AppManager.shared.saveAppGridItems()
