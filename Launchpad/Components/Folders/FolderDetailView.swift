@@ -124,7 +124,6 @@ struct FolderDetailView: View {
       guard let currentFolder = folder,
             let pageIndex = pages.firstIndex(where: { page in page.contains(where: { $0.id == currentFolder.id }) }),
             let itemIndex = pages[pageIndex].firstIndex(where: { $0.id == currentFolder.id }) else {
-         // Folder was already removed (e.g., became empty), just dismiss
          folder = nil
          return
       }
