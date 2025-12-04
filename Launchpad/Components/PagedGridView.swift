@@ -16,10 +16,16 @@ struct PagedGridView: View {
    @State private var searchText = ""
    @State private var selectedSearchIndex = 0
    @State private var draggedItem: AppGridItem?
+   @State private var hoveredItem: AppGridItem?
    @State private var selectedFolder: Folder?
    @State private var sortOrder: SortOrder = SortOrder.defaultLayout
    @State private var selectedCategory: Category?
    @State private var isEditMode = false
+
+   // Mouse drag state
+   @State private var dragStartPage = 1
+   @State private var dragOffset: CGFloat = 0
+   @State private var pageWidth: CGFloat = 0
 
    private var totalPages: Int {
       return pages.count + 1  // +1 for category page
@@ -37,43 +43,48 @@ struct PagedGridView: View {
          )
 
          GeometryReader { geo in
-            if searchText.isEmpty {
-               HStack(spacing: 0) {
-                  // Category page
-                  CategoryPageView(
-                     allApps: allApps(),
-                     settings: settingsManager.settings,
-                     onItemTap: handleTap
-                  )
-                  .frame(width: geo.size.width, height: geo.size.height)
-
-                  // Regular app pages
-                  ForEach(pages.indices, id: \.self) { pageIndex in
-                     SinglePageView(
-                        pages: $pages,
-                        draggedItem: $draggedItem,
-                        isEditMode: $isEditMode,
-                        canEdit: sortOrder == .defaultLayout,
-                        pageIndex: pageIndex,
+            Group {
+               if searchText.isEmpty {
+                  HStack(spacing: 0) {
+                     // Category page
+                     CategoryPageView(
+                        allApps: allApps(),
                         settings: settingsManager.settings,
-                        isFolderOpen: selectedFolder != nil,
                         onItemTap: handleTap
                      )
                      .frame(width: geo.size.width, height: geo.size.height)
+
+                     // Regular app pages
+                     ForEach(pages.indices, id: \.self) { pageIndex in
+                        SinglePageView(
+                           pages: $pages,
+                           draggedItem: $draggedItem,
+                           hoveredItem: $hoveredItem,
+                           isEditMode: $isEditMode,
+                           canEdit: sortOrder == .defaultLayout,
+                           pageIndex: pageIndex,
+                           settings: settingsManager.settings,
+                           isFolderOpen: selectedFolder != nil,
+                           onItemTap: handleTap
+                        )
+                        .frame(width: geo.size.width, height: geo.size.height)
+                     }
                   }
+                  .offset(x: calculatePageOffset(width: geo.size.width))
+                  .animation(LaunchpadConstants.springAnimation, value: currentPage)
+                  .padding(.bottom, 16)
+               } else {
+                  SearchResultsView(
+                     apps: filteredApps(),
+                     settings: settingsManager.settings,
+                     selectedIndex: selectedSearchIndex,
+                     onItemTap: handleTap
+                  )
+                  .frame(width: geo.size.width, height: geo.size.height)
                }
-               .offset(x: -CGFloat(currentPage) * geo.size.width)
-               .animation(LaunchpadConstants.springAnimation, value: currentPage)
-               .padding(.bottom, 16)
-            } else {
-               SearchResultsView(
-                  apps: filteredApps(),
-                  settings: settingsManager.settings,
-                  selectedIndex: selectedSearchIndex,
-                  onItemTap: handleTap
-               )
-               .frame(width: geo.size.width, height: geo.size.height)
             }
+            .onAppear { pageWidth = geo.size.width }
+            .onChange(of: geo.size.width) { oldValue, newValue in pageWidth = newValue }
          }
          PageIndicatorView(
             currentPage: $currentPage,
@@ -111,6 +122,10 @@ struct PagedGridView: View {
          onNavigateRight: { navigateToNextPage(allowCreatePage: true) },
          transparency: settingsManager.settings.transparency
       )
+   }
+
+   private func calculatePageOffset(width: CGFloat) -> CGFloat {
+      -CGFloat(currentPage) * width + dragOffset
    }
 
    private func filteredApps() -> [AppInfo] {
@@ -154,7 +169,7 @@ struct PagedGridView: View {
    }
 
    private func setupEventMonitoring() {
-      eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown, .keyUp, .flagsChanged]) { event in
+      eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown, .keyUp, .flagsChanged, .leftMouseDown, .leftMouseDragged, .leftMouseUp]) { event in
          switch event.type {
          case .scrollWheel:
             return handleScrollEvent(event: event)
@@ -162,6 +177,12 @@ struct PagedGridView: View {
             return handleKeyEvent(event: event)
          case .flagsChanged:
             return handleFlagsChanged(event: event)
+         case .leftMouseDown:
+            return handleMouseDown(event: event)
+         case .leftMouseDragged:
+            return handleMouseDragged(event: event)
+         case .leftMouseUp:
+            return handleMouseUp(event: event)
          default:
             return event
          }
@@ -198,24 +219,24 @@ struct PagedGridView: View {
 
       let now = Date()
       let timeSinceLastScroll = now.timeIntervalSince(lastScrollTime)
-      
+
       // Detect new gesture: reset accumulation if enough time passed, but keep the page change flag longer
       if timeSinceLastScroll > 0.3 {
          accumulatedScrollX = 0
          accumulatedScrollY = 0
       }
-      
+
       // Only reset the page change flag after a longer pause (gesture truly ended)
       if event.phase == .began || event.phase == .ended || event.phase == .cancelled || timeSinceLastScroll > 0.8 {
          hasChangedPageInCurrentGesture = false
       }
-      
+
       // If we already changed page in this gesture, ignore further scrolling
       guard !hasChangedPageInCurrentGesture else { return event }
-      
+
       // Update last scroll time
       lastScrollTime = now
-      
+
       // Determine which direction has more movement and accumulate accordingly
       if absX >= absY {
          // Horizontal scroll (trackpad swipe)
@@ -250,6 +271,50 @@ struct PagedGridView: View {
             hasChangedPageInCurrentGesture = true
             accumulatedScrollY = 0
             return nil
+         }
+      }
+
+      return event
+   }
+
+   private func handleMouseDown(event: NSEvent) -> NSEvent? {
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event }
+      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { return event }
+
+      dragOffset = 0
+      dragStartPage = currentPage
+
+      return event
+   }
+
+   private func handleMouseDragged(event: NSEvent) -> NSEvent? {
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event }
+      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { return event }
+
+      dragOffset += event.deltaX
+      if pageWidth > 0 {
+         let limit = pageWidth * 1.2  // Allow slight rubber-banding
+         dragOffset = min(max(dragOffset, -limit), limit)
+      }
+
+      return event
+   }
+
+   private func handleMouseUp(event: NSEvent) -> NSEvent? {
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event}
+      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { return event }
+
+      let width = pageWidth > 0 ? pageWidth : LaunchpadConstants.pageChangeThreshold
+      let threshold = max(width * 0.15, 60)
+      if dragOffset < -threshold {
+         withAnimation(LaunchpadConstants.springAnimation) {
+            currentPage = min(dragStartPage + 1, totalPages - 1)
+            dragOffset = 0
+         }
+      } else if dragOffset > threshold {
+         withAnimation(LaunchpadConstants.springAnimation) {
+            currentPage =  max(dragStartPage - 1, 0)
+            dragOffset = 0
          }
       }
 
@@ -392,7 +457,7 @@ struct PagedGridView: View {
 
       selectedSearchIndex = NavigationHelper.navigateUp(currentIndex: selectedSearchIndex, itemCount: apps.count, columns: settingsManager.settings.columns)
    }
-   
+
    private func navigateSearchDown() {
       let apps = filteredApps()
       guard !apps.isEmpty else { return }
@@ -413,3 +478,4 @@ struct PagedGridView: View {
       }
    }
 }
+
