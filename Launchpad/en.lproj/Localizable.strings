@@ -75,6 +75,7 @@
 "sort_by_type" = "Type (Folders First)";
 "sort_by_last_opened" = "Recently Opened";
 "sort_by_install_date" = "Install Date";
+"sort_by_most_opened" = "Most Opened";
 
 // MARK: - Folder Management
 "untitled_folder" = "Untitled Folder";

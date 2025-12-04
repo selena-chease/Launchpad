@@ -9,8 +9,9 @@ struct AppInfo: Identifiable, Equatable, Hashable {
    let lastOpenedDate: Date?
    let installDate: Date?
    var page: Int
+   var openCount: Int
 
-   init(name: String, icon: NSImage, path: String, bundleId: String, lastOpenedDate: Date?, installDate: Date?, page: Int = 0) {
+   init(name: String, icon: NSImage, path: String, bundleId: String, lastOpenedDate: Date?, installDate: Date?, page: Int = 0, openCount: Int = 0) {
       self.id = UUID()
       self.name = name
       self.icon = icon
@@ -19,5 +20,6 @@ struct AppInfo: Identifiable, Equatable, Hashable {
       self.lastOpenedDate = lastOpenedDate
       self.installDate = installDate
       self.page = page
+      self.openCount = openCount
    }
 }

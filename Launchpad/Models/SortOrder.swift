@@ -6,6 +6,7 @@ enum SortOrder: String, Codable, CaseIterable {
    case itemType = "type"
    case lastOpened = "lastOpened"
    case installDate = "installDate"
+   case mostOpened = "mostOpened"
    
    var displayName: String {
       switch self {
@@ -19,6 +20,8 @@ enum SortOrder: String, Codable, CaseIterable {
          return L10n.sortByLastOpened
       case .installDate:
          return L10n.sortByInstallDate
+      case .mostOpened:
+         return L10n.sortByMostOpened
       }
    }
 }

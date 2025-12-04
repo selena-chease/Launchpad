@@ -101,6 +101,8 @@ final class AppManager: ObservableObject {
          allItems = sortByLastOpened(allItems)
       case .installDate:
          allItems = sortByInstallDate(allItems)
+      case .mostOpened:
+         allItems = sortByMostOpened(allItems)
       case .defaultLayout:
          allItems = loadLayoutFromUserDefaults(for: discoverApps())
       }
@@ -127,6 +129,30 @@ final class AppManager: ObservableObject {
    
    fileprivate func sortByInstallDate(_ items: [AppGridItem]) -> [AppGridItem] {
       return items.sorted { sortByDate($0, $1, keyPath: \.installDate) }
+   }
+   
+   fileprivate func sortByMostOpened(_ items: [AppGridItem]) -> [AppGridItem] {
+      return items.sorted { sortByCount($0, $1) }
+   }
+   
+   private func sortByCount(_ item1: AppGridItem, _ item2: AppGridItem) -> Bool {
+      let count1 = item1.openCount
+      let count2 = item2.openCount
+      
+      // If both have counts, compare them (higher first)
+      if count1 > 0 && count2 > 0 {
+         if count1 != count2 {
+            return count1 > count2
+         }
+         // If counts are equal, sort by name
+         return item1.name < item2.name
+      }
+      // If only first has count, it comes first
+      if count1 > 0 { return true }
+      // If only second has count, it comes first
+      if count2 > 0 { return false }
+      // If neither has count, sort by name
+      return item1.name < item2.name
    }
    
    private func sortByDate(_ item1: AppGridItem, _ item2: AppGridItem, keyPath: KeyPath<AppGridItem, Date?>) -> Bool {
@@ -225,8 +251,9 @@ final class AppManager: ObservableObject {
    private func loadApp(from itemData: [String: Any], appsByPath: [String: AppInfo]) -> AppInfo? {
       let path = itemData["path"] as! String
       let page = itemData["page"] as! Int
+      let openCount = itemData["openCount"] as? Int ?? 0
       guard let baseApp = appsByPath[path] else { return nil }
-      return AppInfo(name: baseApp.name, icon: baseApp.icon, path: baseApp.path, bundleId: baseApp.bundleId,lastOpenedDate: baseApp.lastOpenedDate, installDate: baseApp.installDate, page: page)
+      return AppInfo(name: baseApp.name, icon: baseApp.icon, path: baseApp.path, bundleId: baseApp.bundleId,lastOpenedDate: baseApp.lastOpenedDate, installDate: baseApp.installDate, page: page, openCount: openCount)
    }
    
    private func loadFolder(from itemData: [String: Any], appsByPath: [String: AppInfo]) -> Folder? {
@@ -360,6 +387,70 @@ final class AppManager: ObservableObject {
          return false
       case .category:
          return false
+      }
+   }
+   
+   func incrementOpenCount(forPath path: String) {
+      print("Increment open count for app at path: \(path)")
+      var updated = false
+      
+      for pageIndex in 0..<pages.count {
+         for itemIndex in 0..<pages[pageIndex].count {
+            let item = pages[pageIndex][itemIndex]
+            
+            switch item {
+            case .app(let app):
+               if app.path == path {
+                  let updatedApp = AppInfo(
+                     name: app.name,
+                     icon: app.icon,
+                     path: app.path,
+                     bundleId: app.bundleId,
+                     lastOpenedDate: app.lastOpenedDate,
+                     installDate: app.installDate,
+                     page: app.page,
+                     openCount: app.openCount + 1
+                  )
+                  pages[pageIndex][itemIndex] = .app(updatedApp)
+                  updated = true
+                  break
+               }
+            case .folder(let folder):
+               // Check if the app is in the folder
+               if let appIndex = folder.apps.firstIndex(where: { $0.path == path }) {
+                  var updatedApps = folder.apps
+                  let app = updatedApps[appIndex]
+                  updatedApps[appIndex] = AppInfo(
+                     name: app.name,
+                     icon: app.icon,
+                     path: app.path,
+                     bundleId: app.bundleId,
+                     lastOpenedDate: app.lastOpenedDate,
+                     installDate: app.installDate,
+                     page: app.page,
+                     openCount: app.openCount + 1
+                  )
+                  let updatedFolder = Folder(name: folder.name, page: folder.page, apps: updatedApps)
+                  pages[pageIndex][itemIndex] = .folder(updatedFolder)
+                  updated = true
+                  break
+               }
+            case .category:
+               break
+            }
+            
+            if updated {
+               break
+            }
+         }
+         
+         if updated {
+            break
+         }
+      }
+      
+      if updated {
+         saveAppGridItems()
       }
    }
 }
