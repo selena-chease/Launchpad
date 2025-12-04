@@ -16,20 +16,16 @@ struct PagedGridView: View {
    @State private var searchText = ""
    @State private var selectedSearchIndex = 0
    @State private var draggedItem: AppGridItem?
+   @State private var hoveredItem: AppGridItem?
    @State private var selectedFolder: Folder?
    @State private var sortOrder: SortOrder = SortOrder.defaultLayout
    @State private var selectedCategory: Category?
    @State private var isEditMode = false
-   
+
    // Mouse drag state
-   @State private var isMouseDragging = false
-   @State private var mouseDragStartX: CGFloat = 0
-   @State private var mouseDragCurrentX: CGFloat = 0
-   @State private var dragStartPage = 0
-   
-   // Mouse drag constants
-   private let dragInitiationThreshold: CGFloat = 10  // Minimum movement to start drag
-   private let pageChangeThreshold: CGFloat = 100     // Minimum drag distance to change page
+   @State private var dragStartPage = 1
+   @State private var dragOffset: CGFloat = 0
+   @State private var pageWidth: CGFloat = 0
 
    private var totalPages: Int {
       return pages.count + 1  // +1 for category page
@@ -47,43 +43,48 @@ struct PagedGridView: View {
          )
 
          GeometryReader { geo in
-            if searchText.isEmpty {
-               HStack(spacing: 0) {
-                  // Category page
-                  CategoryPageView(
-                     allApps: allApps(),
-                     settings: settingsManager.settings,
-                     onItemTap: handleTap
-                  )
-                  .frame(width: geo.size.width, height: geo.size.height)
-
-                  // Regular app pages
-                  ForEach(pages.indices, id: \.self) { pageIndex in
-                     SinglePageView(
-                        pages: $pages,
-                        draggedItem: $draggedItem,
-                        isEditMode: $isEditMode,
-                        canEdit: sortOrder == .defaultLayout,
-                        pageIndex: pageIndex,
+            Group {
+               if searchText.isEmpty {
+                  HStack(spacing: 0) {
+                     // Category page
+                     CategoryPageView(
+                        allApps: allApps(),
                         settings: settingsManager.settings,
-                        isFolderOpen: selectedFolder != nil,
                         onItemTap: handleTap
                      )
                      .frame(width: geo.size.width, height: geo.size.height)
+
+                     // Regular app pages
+                     ForEach(pages.indices, id: \.self) { pageIndex in
+                        SinglePageView(
+                           pages: $pages,
+                           draggedItem: $draggedItem,
+                           hoveredItem: $hoveredItem,
+                           isEditMode: $isEditMode,
+                           canEdit: sortOrder == .defaultLayout,
+                           pageIndex: pageIndex,
+                           settings: settingsManager.settings,
+                           isFolderOpen: selectedFolder != nil,
+                           onItemTap: handleTap
+                        )
+                        .frame(width: geo.size.width, height: geo.size.height)
+                     }
                   }
+                  .offset(x: calculatePageOffset(width: geo.size.width))
+                  //.animation(isMouseDragging ? nil : LaunchpadConstants.springAnimation, value: currentPage)
+                  .padding(.bottom, 16)
+               } else {
+                  SearchResultsView(
+                     apps: filteredApps(),
+                     settings: settingsManager.settings,
+                     selectedIndex: selectedSearchIndex,
+                     onItemTap: handleTap
+                  )
+                  .frame(width: geo.size.width, height: geo.size.height)
                }
-               .offset(x: calculatePageOffset(width: geo.size.width))
-               .animation(isMouseDragging ? nil : LaunchpadConstants.springAnimation, value: currentPage)
-               .padding(.bottom, 16)
-            } else {
-               SearchResultsView(
-                  apps: filteredApps(),
-                  settings: settingsManager.settings,
-                  selectedIndex: selectedSearchIndex,
-                  onItemTap: handleTap
-               )
-               .frame(width: geo.size.width, height: geo.size.height)
             }
+            .onAppear { pageWidth = geo.size.width }
+            .onChange(of: geo.size.width) { oldValue, newValue in pageWidth = newValue }
          }
          PageIndicatorView(
             currentPage: $currentPage,
@@ -122,17 +123,9 @@ struct PagedGridView: View {
          transparency: settingsManager.settings.transparency
       )
    }
-   
+
    private func calculatePageOffset(width: CGFloat) -> CGFloat {
-      let baseOffset = -CGFloat(currentPage) * width
-      
-      // Add drag offset if actively dragging
-      if isMouseDragging {
-         let dragOffset = mouseDragCurrentX - mouseDragStartX
-         return baseOffset + dragOffset
-      }
-      
-      return baseOffset
+      -CGFloat(currentPage) * width + dragOffset
    }
 
    private func filteredApps() -> [AppInfo] {
@@ -226,24 +219,24 @@ struct PagedGridView: View {
 
       let now = Date()
       let timeSinceLastScroll = now.timeIntervalSince(lastScrollTime)
-      
+
       // Detect new gesture: reset accumulation if enough time passed, but keep the page change flag longer
       if timeSinceLastScroll > 0.3 {
          accumulatedScrollX = 0
          accumulatedScrollY = 0
       }
-      
+
       // Only reset the page change flag after a longer pause (gesture truly ended)
       if event.phase == .began || event.phase == .ended || event.phase == .cancelled || timeSinceLastScroll > 0.8 {
          hasChangedPageInCurrentGesture = false
       }
-      
+
       // If we already changed page in this gesture, ignore further scrolling
       guard !hasChangedPageInCurrentGesture else { return event }
-      
+
       // Update last scroll time
       lastScrollTime = now
-      
+
       // Determine which direction has more movement and accumulate accordingly
       if absX >= absY {
          // Horizontal scroll (trackpad swipe)
@@ -286,75 +279,46 @@ struct PagedGridView: View {
 
    private func handleMouseDown(event: NSEvent) -> NSEvent? {
       guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event }
-      
-      // Only initiate drag if not clicking on an app item (allow normal drag-and-drop)
-      guard draggedItem == nil else { return event }
-      
-      // Store the initial mouse position
-      mouseDragStartX = event.locationInWindow.x
-      mouseDragCurrentX = mouseDragStartX
+      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { return event }
+
+      dragOffset = 0
       dragStartPage = currentPage
-      isMouseDragging = false  // Don't set to true yet, wait for actual drag
-      
+
       return event
    }
-   
+
    private func handleMouseDragged(event: NSEvent) -> NSEvent? {
       guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event }
-      
-      // Only handle page dragging if not dragging an app item
-      guard draggedItem == nil else { return event }
-      
-      // Update current drag position
-      mouseDragCurrentX = event.locationInWindow.x
-      let dragDistance = mouseDragCurrentX - mouseDragStartX
-      
-      // Consider it a drag gesture if moved more than the initiation threshold
-      if !isMouseDragging && abs(dragDistance) > dragInitiationThreshold {
-         isMouseDragging = true
+      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { return event }
+
+      dragOffset += event.deltaX
+      if pageWidth > 0 {
+         let limit = pageWidth * 1.2  // Allow slight rubber-banding
+         dragOffset = min(max(dragOffset, -limit), limit)
       }
-      
-      // If we're in a drag gesture, prevent default behavior
-      if isMouseDragging {
-         return nil
-      }
-      
+
       return event
    }
-   
+
    private func handleMouseUp(event: NSEvent) -> NSEvent? {
-      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { 
-         isMouseDragging = false
-         return event 
-      }
-      
-      // Only handle if we were in a drag gesture
-      guard isMouseDragging else { return event }
-      
-      let dragDistance = mouseDragCurrentX - mouseDragStartX
-      
-      // Determine if we should change pages based on drag distance
-      if dragDistance < -pageChangeThreshold {
-         // Dragged left, go to next page
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event}
+      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { return event }
+
+      let width = pageWidth > 0 ? pageWidth : LaunchpadConstants.pageChangeThreshold
+      let threshold = max(width * 0.15, 60)
+      if dragOffset < -threshold {
          withAnimation(LaunchpadConstants.springAnimation) {
-            currentPage = min(currentPage + 1, totalPages - 1)
+            currentPage = min(dragStartPage + 1, totalPages - 1)
+            dragOffset = 0
          }
-      } else if dragDistance > pageChangeThreshold {
-         // Dragged right, go to previous page
+      } else if dragOffset > threshold {
          withAnimation(LaunchpadConstants.springAnimation) {
-            currentPage = max(currentPage - 1, 0)
-         }
-      } else {
-         // Drag was too short, snap back to original page
-         withAnimation(LaunchpadConstants.springAnimation) {
-            currentPage = dragStartPage
+            currentPage =  max(dragStartPage - 1, 0)
+            dragOffset = 0
          }
       }
-      
-      // Reset drag state
-      isMouseDragging = false
-      
-      return nil
+
+      return event
    }
 
    private func handleFlagsChanged(event: NSEvent) -> NSEvent? {
@@ -493,7 +457,7 @@ struct PagedGridView: View {
 
       selectedSearchIndex = NavigationHelper.navigateUp(currentIndex: selectedSearchIndex, itemCount: apps.count, columns: settingsManager.settings.columns)
    }
-   
+
    private func navigateSearchDown() {
       let apps = filteredApps()
       guard !apps.isEmpty else { return }
@@ -514,3 +478,4 @@ struct PagedGridView: View {
       }
    }
 }
+
