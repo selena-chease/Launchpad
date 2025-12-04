@@ -20,6 +20,12 @@ struct PagedGridView: View {
    @State private var sortOrder: SortOrder = SortOrder.defaultLayout
    @State private var selectedCategory: Category?
    @State private var isEditMode = false
+   
+   // Mouse drag state
+   @State private var isMouseDragging = false
+   @State private var mouseDragStartX: CGFloat = 0
+   @State private var mouseDragCurrentX: CGFloat = 0
+   @State private var dragStartPage = 0
 
    private var totalPages: Int {
       return pages.count + 1  // +1 for category page
@@ -62,8 +68,8 @@ struct PagedGridView: View {
                      .frame(width: geo.size.width, height: geo.size.height)
                   }
                }
-               .offset(x: -CGFloat(currentPage) * geo.size.width)
-               .animation(LaunchpadConstants.springAnimation, value: currentPage)
+               .offset(x: calculatePageOffset(width: geo.size.width))
+               .animation(isMouseDragging ? nil : LaunchpadConstants.springAnimation, value: currentPage)
                .padding(.bottom, 16)
             } else {
                SearchResultsView(
@@ -112,6 +118,18 @@ struct PagedGridView: View {
          transparency: settingsManager.settings.transparency
       )
    }
+   
+   private func calculatePageOffset(width: CGFloat) -> CGFloat {
+      let baseOffset = -CGFloat(currentPage) * width
+      
+      // Add drag offset if actively dragging
+      if isMouseDragging {
+         let dragOffset = mouseDragCurrentX - mouseDragStartX
+         return baseOffset + dragOffset
+      }
+      
+      return baseOffset
+   }
 
    private func filteredApps() -> [AppInfo] {
       guard !searchText.isEmpty else { return [] }
@@ -154,7 +172,7 @@ struct PagedGridView: View {
    }
 
    private func setupEventMonitoring() {
-      eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown, .keyUp, .flagsChanged]) { event in
+      eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .keyDown, .keyUp, .flagsChanged, .leftMouseDown, .leftMouseDragged, .leftMouseUp]) { event in
          switch event.type {
          case .scrollWheel:
             return handleScrollEvent(event: event)
@@ -162,6 +180,12 @@ struct PagedGridView: View {
             return handleKeyEvent(event: event)
          case .flagsChanged:
             return handleFlagsChanged(event: event)
+         case .leftMouseDown:
+            return handleMouseDown(event: event)
+         case .leftMouseDragged:
+            return handleMouseDragged(event: event)
+         case .leftMouseUp:
+            return handleMouseUp(event: event)
          default:
             return event
          }
@@ -254,6 +278,82 @@ struct PagedGridView: View {
       }
 
       return event
+   }
+
+   private func handleMouseDown(event: NSEvent) -> NSEvent? {
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event }
+      
+      // Only initiate drag if not clicking on an app item (allow normal drag-and-drop)
+      guard draggedItem == nil else { return event }
+      
+      // Store the initial mouse position
+      mouseDragStartX = event.locationInWindow.x
+      mouseDragCurrentX = mouseDragStartX
+      dragStartPage = currentPage
+      isMouseDragging = false  // Don't set to true yet, wait for actual drag
+      
+      return event
+   }
+   
+   private func handleMouseDragged(event: NSEvent) -> NSEvent? {
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event }
+      
+      // Only handle page dragging if not dragging an app item
+      guard draggedItem == nil else { return event }
+      
+      // Update current drag position
+      mouseDragCurrentX = event.locationInWindow.x
+      let dragDistance = mouseDragCurrentX - mouseDragStartX
+      
+      // Consider it a drag gesture if moved more than a threshold (e.g., 10 pixels)
+      if !isMouseDragging && abs(dragDistance) > 10 {
+         isMouseDragging = true
+      }
+      
+      // If we're in a drag gesture, prevent default behavior
+      if isMouseDragging {
+         return nil
+      }
+      
+      return event
+   }
+   
+   private func handleMouseUp(event: NSEvent) -> NSEvent? {
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { 
+         isMouseDragging = false
+         return event 
+      }
+      
+      // Only handle if we were in a drag gesture
+      guard isMouseDragging else { return event }
+      
+      let dragDistance = mouseDragCurrentX - mouseDragStartX
+      let threshold: CGFloat = 100  // Minimum drag distance to trigger page change
+      
+      // Determine if we should change pages based on drag distance
+      if dragDistance < -threshold {
+         // Dragged left, go to next page
+         withAnimation(LaunchpadConstants.springAnimation) {
+            currentPage = min(currentPage + 1, totalPages - 1)
+         }
+      } else if dragDistance > threshold {
+         // Dragged right, go to previous page
+         withAnimation(LaunchpadConstants.springAnimation) {
+            currentPage = max(currentPage - 1, 0)
+         }
+      } else {
+         // Drag was too short, snap back to original page
+         withAnimation(LaunchpadConstants.springAnimation) {
+            currentPage = dragStartPage
+         }
+      }
+      
+      // Reset drag state
+      isMouseDragging = false
+      mouseDragStartX = 0
+      mouseDragCurrentX = 0
+      
+      return nil
    }
 
    private func handleFlagsChanged(event: NSEvent) -> NSEvent? {
