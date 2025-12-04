@@ -108,7 +108,7 @@ struct PagedGridView: View {
          totalPages: totalPages,
          draggedItem: draggedItem,
          onNavigateLeft: navigateToPreviousPage,
-         onNavigateRight: navigateToNextPage,
+         onNavigateRight: { navigateToNextPage(allowCreatePage: true) },
          transparency: settingsManager.settings.transparency
       )
    }
@@ -335,12 +335,12 @@ struct PagedGridView: View {
       }
    }
 
-   private func navigateToNextPage() {
+   private func navigateToNextPage(allowCreatePage: Bool = false) {
       if currentPage < totalPages - 1 {
          withAnimation(LaunchpadConstants.springAnimation) {
             currentPage += 1
          }
-      } else {
+      } else if allowCreatePage {
          createNewPage()
       }
    }
