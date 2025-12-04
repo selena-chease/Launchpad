@@ -26,6 +26,10 @@ struct PagedGridView: View {
    @State private var mouseDragStartX: CGFloat = 0
    @State private var mouseDragCurrentX: CGFloat = 0
    @State private var dragStartPage = 0
+   
+   // Mouse drag constants
+   private let dragInitiationThreshold: CGFloat = 10  // Minimum movement to start drag
+   private let pageChangeThreshold: CGFloat = 100     // Minimum drag distance to change page
 
    private var totalPages: Int {
       return pages.count + 1  // +1 for category page
@@ -305,8 +309,8 @@ struct PagedGridView: View {
       mouseDragCurrentX = event.locationInWindow.x
       let dragDistance = mouseDragCurrentX - mouseDragStartX
       
-      // Consider it a drag gesture if moved more than a threshold (e.g., 10 pixels)
-      if !isMouseDragging && abs(dragDistance) > 10 {
+      // Consider it a drag gesture if moved more than the initiation threshold
+      if !isMouseDragging && abs(dragDistance) > dragInitiationThreshold {
          isMouseDragging = true
       }
       
@@ -328,15 +332,14 @@ struct PagedGridView: View {
       guard isMouseDragging else { return event }
       
       let dragDistance = mouseDragCurrentX - mouseDragStartX
-      let threshold: CGFloat = 100  // Minimum drag distance to trigger page change
       
       // Determine if we should change pages based on drag distance
-      if dragDistance < -threshold {
+      if dragDistance < -pageChangeThreshold {
          // Dragged left, go to next page
          withAnimation(LaunchpadConstants.springAnimation) {
             currentPage = min(currentPage + 1, totalPages - 1)
          }
-      } else if dragDistance > threshold {
+      } else if dragDistance > pageChangeThreshold {
          // Dragged right, go to previous page
          withAnimation(LaunchpadConstants.springAnimation) {
             currentPage = max(currentPage - 1, 0)
@@ -350,8 +353,6 @@ struct PagedGridView: View {
       
       // Reset drag state
       isMouseDragging = false
-      mouseDragStartX = 0
-      mouseDragCurrentX = 0
       
       return nil
    }
