@@ -301,8 +301,8 @@ struct PagedGridView: View {
    }
 
    private func handleMouseUp(event: NSEvent) -> NSEvent? {
-      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { return event}
-      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { return event }
+      guard searchText.isEmpty && selectedFolder == nil && selectedCategory == nil && showSettings == false else { dragOffset = 0; return event}
+      guard draggedItem == nil && hoveredItem == nil && !isEditMode else { dragOffset = 0; return event }
 
       let width = pageWidth > 0 ? pageWidth : LaunchpadConstants.pageChangeThreshold
       let threshold = max(width * 0.15, 60)
@@ -314,6 +314,10 @@ struct PagedGridView: View {
       } else if dragOffset > threshold {
          withAnimation(LaunchpadConstants.springAnimation) {
             currentPage =  max(dragStartPage - 1, 0)
+            dragOffset = 0
+         }
+      } else {
+         withAnimation(LaunchpadConstants.springAnimation) {
             dragOffset = 0
          }
       }
