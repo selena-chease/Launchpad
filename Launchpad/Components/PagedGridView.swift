@@ -71,7 +71,7 @@ struct PagedGridView: View {
                      }
                   }
                   .offset(x: calculatePageOffset(width: geo.size.width))
-                  //.animation(isMouseDragging ? nil : LaunchpadConstants.springAnimation, value: currentPage)
+                  .animation(LaunchpadConstants.springAnimation, value: currentPage)
                   .padding(.bottom, 16)
                } else {
                   SearchResultsView(
