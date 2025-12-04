@@ -76,6 +76,7 @@ struct L10n {
    static let sortByType = "sort_by_type".localized
    static let sortByLastOpened = "sort_by_last_opened".localized
    static let sortByInstallDate = "sort_by_install_date".localized
+   static let sortByMostOpened = "sort_by_most_opened".localized
    
    // MARK: - Folder Management
    static let untitledFolder = "untitled_folder".localized

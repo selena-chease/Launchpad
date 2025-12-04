@@ -75,6 +75,7 @@
 "sort_by_type" = "Típus";
 "sort_by_last_opened" = "Megnyitás dátuma";
 "sort_by_install_date" = "Telepítés dátuma";
+"sort_by_most_opened" = "Legtöbbször megnyitott";
 
 // MARK: - Folder Management
 "untitled_folder" = "Névtelen Mappa";

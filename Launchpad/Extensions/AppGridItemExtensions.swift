@@ -25,6 +25,14 @@ extension AppGridItem {
       }
    }
 
+   var openCount: Int {
+      switch self {
+      case .app(let app): return app.openCount
+      case .folder(let folder): return folder.apps.map(\.openCount).reduce(0, +)
+      case .category: return 0
+      }
+   }
+
    var appPaths: Set<String> {
       switch self {
       case .app(let app): return [app.path]
@@ -57,14 +65,15 @@ extension AppGridItem {
          "id": app.id.uuidString,
          "name": app.name,
          "page": app.page,
-         "path": app.path
+         "path": app.path,
+         "openCount": app.openCount
       ]
    }
 
    func withUpdatedPage(_ newPage: Int) -> AppGridItem {
       switch self {
       case .app(let app):
-         return .app(AppInfo(name: app.name, icon: app.icon, path: app.path, bundleId: app.bundleId, lastOpenedDate: app.lastOpenedDate, installDate: app.installDate, page: newPage))
+         return .app(AppInfo(name: app.name, icon: app.icon, path: app.path, bundleId: app.bundleId, lastOpenedDate: app.lastOpenedDate, installDate: app.installDate, page: newPage, openCount: app.openCount))
       case .folder(let folder):
          return .folder(Folder(name: folder.name, page: newPage, apps: folder.apps))
       case .category(let category):
